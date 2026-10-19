@@ -1,0 +1,19 @@
+{
+  "name": "codegarden",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "tsx tests/test_engine.ts"
+  },
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/AtharvaTayade2005/CodeGarden/issues"
+  },
+  "homepage": "https://github.com/AtharvaTayade2005/CodeGarden#readme",
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
