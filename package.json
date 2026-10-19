@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "tsx tests/test_engine.ts"
+    "test": "tsx tests/test_engine.ts && tsx tests/test_runner.ts",
+    "test:engine": "tsx tests/test_engine.ts",
+    "test:runner": "tsx tests/test_runner.ts"
   },
   "type": "module",
   "bugs": {
