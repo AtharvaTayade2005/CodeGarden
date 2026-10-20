@@ -4,8 +4,8 @@
  */
 
 import assert from 'node:assert';
-import { runPythonCode, inspectCodeSafety } from '../lib/pythonRunner.js';
-import { BugType } from '../lib/treeEngine.js';
+import { runPythonCode, inspectCodeSafety } from '../lib/pythonRunner';
+import { BugType } from '../lib/treeEngine';
 
 let passedCount = 0;
 let totalCount = 0;

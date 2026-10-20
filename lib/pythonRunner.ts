@@ -5,8 +5,8 @@
  */
 
 import { spawn, spawnSync } from 'node:child_process';
-import { BugType, mapExceptionToBug } from './treeEngine.js';
-import { TestCase } from './curriculumData.js';
+import { BugType, mapExceptionToBug } from './treeEngine';
+import { TestCase } from './curriculumData';
 
 export interface ExecutionResult {
   passed: boolean;

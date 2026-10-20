@@ -12,8 +12,8 @@ import {
   getTreeStage,
   mapExceptionToBug,
   TreeState,
-} from '../lib/treeEngine.js';
-import { initialExercises } from '../lib/curriculumData.js';
+} from '../lib/treeEngine';
+import { initialExercises } from '../lib/curriculumData';
 
 let passedCount = 0;
 let totalCount = 0;

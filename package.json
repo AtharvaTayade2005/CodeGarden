@@ -4,9 +4,13 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "tsx tests/test_engine.ts && tsx tests/test_runner.ts",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "tsx tests/test_engine.ts && tsx tests/test_runner.ts && tsx tests/test_scaffolding.ts",
     "test:engine": "tsx tests/test_engine.ts",
-    "test:runner": "tsx tests/test_runner.ts"
+    "test:runner": "tsx tests/test_runner.ts",
+    "test:scaffolding": "tsx tests/test_scaffolding.ts"
   },
   "type": "module",
   "bugs": {
@@ -15,7 +19,16 @@
   "homepage": "https://github.com/AtharvaTayade2005/CodeGarden#readme",
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "lucide-react": "^1.60.0",
+    "next": "^16.4.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   }
 }
