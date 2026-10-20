@@ -22,8 +22,23 @@ export async function POST(req: NextRequest) {
         { status: 404 }
       );
     }
-
     const stateToApply: TreeState = currentTreeState || INITIAL_STATE;
+
+    // Gracefully handle empty code submissions with instant validation warning
+    if (!code.trim()) {
+      return NextResponse.json({
+        executionResult: {
+          passed: false,
+          stdout: '',
+          stderr: 'Validation Warning: Code submission is empty. Please write Python code before running.',
+          errorType: 'ValidationError',
+          detectedBug: 'STRUCTURE_CATERPILLAR',
+          failedTestCaseIndex: 0,
+          executionTimeMs: 0,
+        },
+        updatedTreeState: stateToApply,
+      });
+    }
 
     // Execute student code against exercise test cases in the sandbox
     const executionResult = await runPythonCode(code, exercise.testCases);

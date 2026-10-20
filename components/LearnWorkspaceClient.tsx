@@ -9,6 +9,7 @@ import { ScaffoldingResponse } from '@/lib/scaffoldingEngine';
 import TreeCanvas from './TreeCanvas';
 import CodeEditor from './CodeEditor';
 import DiagnosticTerminal from './DiagnosticTerminal';
+import DemoControls from './DemoControls';
 
 interface LearnWorkspaceClientProps {
   exercise: Exercise;
@@ -59,6 +60,15 @@ export default function LearnWorkspaceClient({ exercise }: LearnWorkspaceClientP
 
   // Run code against Python sandbox API
   const handleRunCode = async () => {
+    // Edge-case check: Empty code submission warning
+    if (!code.trim()) {
+      setNotification({
+        message: '⚠️ Validation Warning: Code editor is empty. Please write Python code before running.',
+        type: 'damage',
+      });
+      return;
+    }
+
     setIsRunning(true);
     setNotification(null);
 
@@ -146,7 +156,23 @@ export default function LearnWorkspaceClient({ exercise }: LearnWorkspaceClientP
 
   const handleResetCode = () => {
     setCode(exercise.starterCode);
-    setNotification({ message: 'Starter code restored.', type: 'info' });
+    setExecutionResult(null);
+    setHint(null);
+    setAttemptCount(0);
+    setTreeState((prev) => ({
+      ...prev,
+      hp: 80, // Restored to baseline HP
+      activeBugs: [], // Clear parasites
+    }));
+    setNotification({
+      message: 'Starter code restored. HP reset to baseline (80 HP); accumulated XP preserved.',
+      type: 'info',
+    });
+  };
+
+  const handleSetDemoState = (newState: TreeState, message: string) => {
+    setTreeState(newState);
+    setNotification({ message, type: 'info' });
   };
 
   const handleApplySnippet = (snippet: string) => {
@@ -362,6 +388,9 @@ export default function LearnWorkspaceClient({ exercise }: LearnWorkspaceClientP
         {/* RIGHT COLUMN: Living Code Tree Visualizer & Parasite HUD */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <TreeCanvas treeState={treeState} treeStage={treeStage} />
+
+          {/* Demo Controls for Presentation & Simulation */}
+          <DemoControls onSetDemoState={handleSetDemoState} />
 
           {/* Ecological Learning Guide Card */}
           <div className="glass-panel" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>

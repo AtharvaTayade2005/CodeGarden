@@ -5,6 +5,7 @@
  */
 
 import { spawn, spawnSync } from 'node:child_process';
+import { StringDecoder } from 'node:string_decoder';
 import { BugType, mapExceptionToBug } from './treeEngine';
 import { TestCase } from './curriculumData';
 
@@ -24,6 +25,20 @@ export interface RunOptions {
 }
 
 export const DEFAULT_TIMEOUT_MS = 3000;
+export const MAX_OUTPUT_LENGTH = 10000;
+
+/**
+ * Truncates output exceeding MAX_OUTPUT_LENGTH to prevent UI freezes.
+ */
+export function truncateOutput(text: string): string {
+  if (text.length > MAX_OUTPUT_LENGTH) {
+    return (
+      text.slice(0, MAX_OUTPUT_LENGTH) +
+      '\n... [Output truncated: exceeded 10,000 character limit to prevent UI freeze]'
+    );
+  }
+  return text;
+}
 
 let cachedPythonBin: string | null = null;
 
@@ -189,6 +204,9 @@ function spawnPythonProcess(
     let timedOut = false;
     let closed = false;
 
+    const stdoutDecoder = new StringDecoder('utf8');
+    const stderrDecoder = new StringDecoder('utf8');
+
     // Execute with isolated mode flag -I
     const child = spawn(pythonBin, ['-I', '-c', code], {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -221,21 +239,27 @@ function spawnPythonProcess(
     }, timeoutMs);
 
     child.stdout.on('data', (chunk: Buffer) => {
-      stdoutData += chunk.toString();
+      if (stdoutData.length <= MAX_OUTPUT_LENGTH) {
+        stdoutData += stdoutDecoder.write(chunk);
+      }
     });
 
     child.stderr.on('data', (chunk: Buffer) => {
-      stderrData += chunk.toString();
+      if (stderrData.length <= MAX_OUTPUT_LENGTH) {
+        stderrData += stderrDecoder.write(chunk);
+      }
     });
 
     child.on('error', (err: Error) => {
       clearTimeout(timeoutTimer);
       if (!closed) {
         closed = true;
+        stdoutData += stdoutDecoder.end();
+        stderrData += stderrDecoder.end();
         stderrData += `\nProcessError: ${err.message}`;
         resolve({
-          stdout: stdoutData,
-          stderr: stderrData,
+          stdout: truncateOutput(stdoutData),
+          stderr: truncateOutput(stderrData),
           exitCode: 1,
           timedOut,
           durationMs: Date.now() - startTime,
@@ -247,9 +271,11 @@ function spawnPythonProcess(
       clearTimeout(timeoutTimer);
       if (!closed) {
         closed = true;
+        stdoutData += stdoutDecoder.end();
+        stderrData += stderrDecoder.end();
         resolve({
-          stdout: stdoutData,
-          stderr: stderrData,
+          stdout: truncateOutput(stdoutData),
+          stderr: truncateOutput(stderrData),
           exitCode: code,
           timedOut,
           durationMs: Date.now() - startTime,
