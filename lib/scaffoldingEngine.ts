@@ -71,6 +71,22 @@ const CURRICULUM_FALLBACKS: Record<string, FallbackCurriculumHint> = {
     tier3Skeleton:
       'fruits = ["apple", "banana", "cherry", "date"]\nidx = int(input())\nif 0 <= idx < ___:\n    print(fruits[___])\nelse:\n    print("Index out of bounds")',
   },
+  'string-slicing-palindrome': {
+    tier1Question:
+      'How can step slicing notation [::-1] be used to compare a string against its exact reversed reflection?',
+    tier2Pseudocode:
+      "Step 1: Read string input from user.\nStep 2: Generate reversed string using word[::-1].\nStep 3: If word equals its reversed form print 'Palindrome', otherwise print 'Not a palindrome'.",
+    tier3Skeleton:
+      'word = input()\nif word == ___:\n    print("Palindrome")\nelse:\n    print("Not a palindrome")',
+  },
+  'modular-functions-factorial': {
+    tier1Question:
+      'What base case value prevents infinite recursive execution when calculating factorial?',
+    tier2Pseudocode:
+      'Step 1: If val <= 1 return 1 as terminating base case.\nStep 2: Otherwise return val multiplied by compute_factorial(val - 1).\nStep 3: Print the result of calling compute_factorial(n).',
+    tier3Skeleton:
+      'def compute_factorial(val):\n    if val <= ___:\n        return 1\n    return val * compute_factorial(___)\n\nprint(compute_factorial(int(input())))',
+  },
 };
 
 /**

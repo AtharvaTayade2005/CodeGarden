@@ -7,10 +7,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "tsx tests/test_engine.ts && tsx tests/test_runner.ts && tsx tests/test_scaffolding.ts",
+    "test": "tsx tests/test_engine.ts && tsx tests/test_runner.ts && tsx tests/test_scaffolding.ts && tsx tests/test_dendrochronology.ts && tsx tests/test_parasites.ts && tsx tests/test_faculty_analytics.ts",
     "test:engine": "tsx tests/test_engine.ts",
     "test:runner": "tsx tests/test_runner.ts",
-    "test:scaffolding": "tsx tests/test_scaffolding.ts"
+    "test:scaffolding": "tsx tests/test_scaffolding.ts",
+    "test:dendro": "tsx tests/test_dendrochronology.ts",
+    "test:parasites": "tsx tests/test_parasites.ts",
+    "test:faculty": "tsx tests/test_faculty_analytics.ts"
+
   },
   "type": "module",
   "bugs": {

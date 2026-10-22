@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { ExecutionResult } from '@/lib/pythonRunner';
 import { TestCase } from '@/lib/curriculumData';
-import { BugType } from '@/lib/treeEngine';
+import { BugType, ParasiteType, PARASITE_DEFINITIONS } from '@/lib/treeEngine';
 import { ScaffoldingResponse } from '@/lib/scaffoldingEngine';
 
 interface DiagnosticTerminalProps {
@@ -11,6 +11,7 @@ interface DiagnosticTerminalProps {
   executionResult: ExecutionResult | null;
   hint: ScaffoldingResponse | null;
   onApplySnippet?: (snippet: string) => void;
+  onDiagnoseParasite?: (parasite: ParasiteType) => void;
   isRunning: boolean;
 }
 
@@ -19,10 +20,12 @@ export default function DiagnosticTerminal({
   executionResult,
   hint,
   onApplySnippet,
+  onDiagnoseParasite,
   isRunning,
 }: DiagnosticTerminalProps) {
   const [activeTab, setActiveTab] = useState<'tests' | 'console' | 'quest'>('tests');
   const [isQuestOpen, setIsQuestOpen] = useState<boolean>(true);
+  const [showRawStderr, setShowRawStderr] = useState<boolean>(false);
 
   const getBugDetails = (bug?: BugType) => {
     switch (bug) {
@@ -184,41 +187,117 @@ export default function DiagnosticTerminal({
         {!isRunning && activeTab === 'tests' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {/* Parasite Alert Card on Failure */}
-            {bugInfo && !executionResult?.passed && (
+            {!executionResult?.passed && (executionResult?.detectedParasite || bugInfo) && (
               <div
                 style={{
-                  padding: '12px 16px',
-                  background: 'rgba(239, 68, 68, 0.08)',
-                  border: `1px solid ${bugInfo.color}`,
+                  padding: '14px 16px',
+                  background: executionResult?.detectedParasite
+                    ? PARASITE_DEFINITIONS[executionResult.detectedParasite].bg
+                    : 'rgba(239, 68, 68, 0.08)',
+                  border: `1.5px solid ${
+                    executionResult?.detectedParasite
+                      ? PARASITE_DEFINITIONS[executionResult.detectedParasite].color
+                      : bugInfo?.color || '#ef4444'
+                  }`,
                   borderRadius: '10px',
                   display: 'flex',
                   alignItems: 'flex-start',
                   gap: '12px',
+                  boxShadow: executionResult?.detectedParasite
+                    ? `0 4px 16px ${PARASITE_DEFINITIONS[executionResult.detectedParasite].bg}`
+                    : 'none',
                 }}
               >
-                <span style={{ fontSize: '1.75rem' }}>{bugInfo.emoji}</span>
+                <span style={{ fontSize: '1.8rem' }}>
+                  {executionResult?.detectedParasite
+                    ? PARASITE_DEFINITIONS[executionResult.detectedParasite].emoji
+                    : bugInfo?.emoji || '⚠️'}
+                </span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
-                    <span style={{ fontWeight: 700, color: bugInfo.color, fontSize: '0.9rem' }}>
-                      {bugInfo.title}
-                    </span>
-                    <span
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px', marginBottom: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          color: executionResult?.detectedParasite
+                            ? PARASITE_DEFINITIONS[executionResult.detectedParasite].color
+                            : bugInfo?.color || '#ef4444',
+                          fontSize: '0.92rem',
+                        }}
+                      >
+                        {executionResult?.detectedParasite
+                          ? `${PARASITE_DEFINITIONS[executionResult.detectedParasite].name} Attached`
+                          : bugInfo?.title || 'Execution Exception'}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '0.7rem',
+                          padding: '1px 8px',
+                          borderRadius: '4px',
+                          background: 'rgba(0,0,0,0.4)',
+                          color: '#e2e8f0',
+                        }}
+                      >
+                        {executionResult?.astLocation
+                          ? `AST Node: ${PARASITE_DEFINITIONS[executionResult.detectedParasite!].locationLabel}`
+                          : executionResult?.errorType} (-15 HP)
+                      </span>
+                    </div>
+
+                    {executionResult?.detectedParasite && onDiagnoseParasite && (
+                      <button
+                        onClick={() => onDiagnoseParasite(executionResult.detectedParasite!)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          background: PARASITE_DEFINITIONS[executionResult.detectedParasite].color,
+                          color: '#0f172a',
+                          border: 'none',
+                          fontWeight: 700,
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <span>{PARASITE_DEFINITIONS[executionResult.detectedParasite].emoji}</span>
+                        <span>Click Bug on Tree</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Single-Sentence Socratic Prompt */}
+                  {executionResult?.socraticPrompt ? (
+                    <div
                       style={{
-                        fontSize: '0.7rem',
-                        padding: '1px 6px',
-                        borderRadius: '4px',
+                        padding: '8px 10px',
                         background: 'rgba(0,0,0,0.4)',
-                        color: '#f87171',
+                        borderLeft: `3px solid ${
+                          executionResult.detectedParasite
+                            ? PARASITE_DEFINITIONS[executionResult.detectedParasite].color
+                            : '#ef4444'
+                        }`,
+                        borderRadius: '0 6px 6px 0',
+                        marginTop: '4px',
+                        marginBottom: '6px',
                       }}
                     >
-                      {executionResult?.errorType} (-15 HP)
-                    </span>
-                  </div>
-                  <p style={{ fontSize: '0.8rem', color: '#d1d5db', marginBottom: '4px' }}>
-                    {bugInfo.damage}
-                  </p>
-                  <p style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
-                    <strong>Ecological Remedy:</strong> {bugInfo.cure}
+                      <p style={{ margin: 0, fontSize: '0.82rem', color: '#f8fafc', fontWeight: 500, lineHeight: 1.4 }}>
+                        &ldquo;{executionResult.socraticPrompt}&rdquo;
+                      </p>
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: '0.8rem', color: '#d1d5db', marginBottom: '4px' }}>
+                      {bugInfo?.damage}
+                    </p>
+                  )}
+
+                  <p style={{ fontSize: '0.72rem', color: '#94a3b8', margin: 0 }}>
+                    <strong>Ecological Remedy:</strong>{' '}
+                    {executionResult?.detectedParasite
+                      ? PARASITE_DEFINITIONS[executionResult.detectedParasite].description
+                      : bugInfo?.cure}
                   </p>
                 </div>
               </div>
@@ -314,10 +393,123 @@ export default function DiagnosticTerminal({
                     <pre style={{ color: '#34d399', whiteSpace: 'pre-wrap' }}>{executionResult.stdout}</pre>
                   </div>
                 )}
+                {/* Intercept raw compiler stack trace with localized botanical parasite card (Req 2) */}
                 {executionResult.stderr && (
                   <div>
-                    <div style={{ color: '#ef4444', marginBottom: '4px' }}>--- STDERR TRACEBACK ---</div>
-                    <pre style={{ color: '#f87171', whiteSpace: 'pre-wrap' }}>{executionResult.stderr}</pre>
+                    {executionResult.detectedParasite ? (
+                      <div
+                        style={{
+                          padding: '16px',
+                          background: 'rgba(15, 23, 42, 0.8)',
+                          border: `1.5px solid ${PARASITE_DEFINITIONS[executionResult.detectedParasite].color}`,
+                          borderRadius: '10px',
+                          boxShadow: `0 4px 20px ${PARASITE_DEFINITIONS[executionResult.detectedParasite].bg}`,
+                          marginBottom: '14px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '1.6rem' }}>{PARASITE_DEFINITIONS[executionResult.detectedParasite].emoji}</span>
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontWeight: 700, fontSize: '0.92rem', color: PARASITE_DEFINITIONS[executionResult.detectedParasite].color }}>
+                                  Raw Terminal Traceback Intercepted
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: '0.68rem',
+                                    background: 'rgba(0,0,0,0.4)',
+                                    color: '#94a3b8',
+                                    padding: '2px 8px',
+                                    borderRadius: '4px',
+                                    border: '1px solid rgba(255,255,255,0.1)',
+                                  }}
+                                >
+                                  Localized to AST Node
+                                </span>
+                              </div>
+                              <span style={{ fontSize: '0.74rem', color: '#cbd5e1' }}>
+                                A visual parasite has attached to your Living Code Tree at the{' '}
+                                <strong style={{ color: PARASITE_DEFINITIONS[executionResult.detectedParasite].color }}>
+                                  {PARASITE_DEFINITIONS[executionResult.detectedParasite].locationLabel}
+                                </strong>
+                                .
+                              </span>
+                            </div>
+                          </div>
+
+                          {onDiagnoseParasite && (
+                            <button
+                              onClick={() => onDiagnoseParasite(executionResult.detectedParasite!)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '6px 12px',
+                                borderRadius: '6px',
+                                background: PARASITE_DEFINITIONS[executionResult.detectedParasite].color,
+                                color: '#0f172a',
+                                border: 'none',
+                                fontWeight: 700,
+                                fontSize: '0.75rem',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <span>{PARASITE_DEFINITIONS[executionResult.detectedParasite].emoji}</span>
+                              <span>Inspect on Tree</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Single-sentence Socratic prompt display */}
+                        <div
+                          style={{
+                            padding: '10px 12px',
+                            background: 'rgba(0,0,0,0.5)',
+                            borderLeft: `3px solid ${PARASITE_DEFINITIONS[executionResult.detectedParasite].color}`,
+                            borderRadius: '0 6px 6px 0',
+                            marginBottom: '10px',
+                          }}
+                        >
+                          <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}>
+                            Socratic Diagnostic Question:
+                          </div>
+                          <p style={{ margin: 0, fontSize: '0.84rem', color: '#f8fafc', fontWeight: 500, lineHeight: 1.45 }}>
+                            &ldquo;{executionResult.socraticPrompt || PARASITE_DEFINITIONS[executionResult.detectedParasite].defaultPrompt}&rdquo;
+                          </p>
+                        </div>
+
+                        {/* Collapsible raw trace for instructors / advanced debugging */}
+                        <div>
+                          <button
+                            onClick={() => setShowRawStderr(!showRawStderr)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#64748b',
+                              fontSize: '0.72rem',
+                              cursor: 'pointer',
+                              padding: 0,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                          >
+                            <span>{showRawStderr ? '▼ Hide' : '▶ Show'} raw compiler trace (advanced debug only)</span>
+                          </button>
+                          {showRawStderr && (
+                            <pre style={{ color: '#f87171', fontSize: '0.75rem', marginTop: '6px', background: 'rgba(0,0,0,0.6)', padding: '8px', borderRadius: '4px', whiteSpace: 'pre-wrap' }}>
+                              {executionResult.stderr}
+                            </pre>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ color: '#ef4444', marginBottom: '4px' }}>--- EXECUTION NOTICE ---</div>
+                        <pre style={{ color: '#f87171', whiteSpace: 'pre-wrap' }}>{executionResult.stderr}</pre>
+                      </div>
+                    )}
                   </div>
                 )}
                 {!executionResult.stdout && !executionResult.stderr && (

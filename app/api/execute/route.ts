@@ -47,7 +47,9 @@ export async function POST(req: NextRequest) {
     const updatedTreeState = applyExerciseResult(
       stateToApply,
       executionResult.passed,
-      executionResult.errorType || executionResult.detectedBug
+      executionResult.detectedParasite || executionResult.errorType || executionResult.detectedBug,
+      executionResult.executionTimeMs,
+      executionResult.stderr
     );
 
     return NextResponse.json({

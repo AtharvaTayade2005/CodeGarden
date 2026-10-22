@@ -1,15 +1,50 @@
 'use client';
 
-import React from 'react';
-import { TreeStage, BugType, TreeState } from '@/lib/treeEngine';
+import React, { useState, useEffect } from 'react';
+import {
+  TreeStage,
+  BugType,
+  TreeState,
+  ParasiteType,
+  PARASITE_DEFINITIONS,
+  ParasiteLocation,
+} from '@/lib/treeEngine';
+import { KeystrokeTelemetryPoint } from '@/lib/dendrochronology';
+import TreeRingCanvas from './TreeRingCanvas';
 
 interface TreeCanvasProps {
   treeState: TreeState;
   treeStage: TreeStage;
+  telemetry?: KeystrokeTelemetryPoint[];
+  activeRingIndex?: number;
+  onSelectRing?: (index: number) => void;
+  activeParasite?: ParasiteType | null;
+  socraticPrompt?: string | null;
+  onSelectParasite?: (parasite: ParasiteType | null) => void;
 }
 
-export default function TreeCanvas({ treeState, treeStage }: TreeCanvasProps) {
+export default function TreeCanvas({
+  treeState,
+  treeStage,
+  telemetry = [],
+  activeRingIndex = 0,
+  onSelectRing = () => {},
+  activeParasite = null,
+  socraticPrompt = null,
+  onSelectParasite = () => {},
+}: TreeCanvasProps) {
   const { hp, xp, activeBugs, streakDays } = treeState;
+  const [activeTab, setActiveTab] = useState<'tree' | 'rings'>('tree');
+  const [selectedParasite, setSelectedParasite] = useState<ParasiteType | null>(
+    activeParasite || treeState.selectedParasite || (treeState.activeParasites?.[0] ?? null)
+  );
+
+  useEffect(() => {
+    if (activeParasite) {
+      setSelectedParasite(activeParasite);
+      setActiveTab('tree');
+    }
+  }, [activeParasite]);
 
   // HP Color calculation (Green: >= 75, Yellow/Amber: 45-74, Crimson: < 45)
   const getHpColor = (val: number): { bar: string; glow: string; text: string } => {
@@ -59,25 +94,135 @@ export default function TreeCanvas({ treeState, treeStage }: TreeCanvasProps) {
     )
   );
 
+  const activeParasites = treeState.activeParasites ? [...treeState.activeParasites] : [];
+  if (activeParasite && !activeParasites.includes(activeParasite)) {
+    activeParasites.push(activeParasite);
+  }
+  const hasParasite = (p: ParasiteType) => activeParasites.includes(p);
   const hasBug = (b: BugType) => activeBugs.includes(b);
+
+  // Anatomical coordinates for localized parasite attachments
+  const getCaterpillarPos = () => {
+    switch (treeStage) {
+      case TreeStage.SEED:
+        return { x: 204, y: 238 };
+      case TreeStage.SPROUT:
+        return { x: 225, y: 160 };
+      case TreeStage.SAPLING:
+        return { x: 245, y: 120 };
+      case TreeStage.FLOURISHING_TREE:
+        return { x: 275, y: 105 };
+    }
+  };
+
+  const getFungalBlightPos = () => {
+    switch (treeStage) {
+      case TreeStage.SEED:
+        return { x: 200, y: 256 };
+      case TreeStage.SPROUT:
+        return { x: 200, y: 200 };
+      case TreeStage.SAPLING:
+      case TreeStage.FLOURISHING_TREE:
+        return { x: 198, y: 190 };
+    }
+  };
 
   return (
     <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {/* Top Status Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {/* Top Status Header & View Switcher */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '1.25rem' }}>🌱</span>
+            {/* Concentric Cross-Section Ring Icon next to tree */}
+            <span
+              onClick={() => setActiveTab(activeTab === 'tree' ? 'rings' : 'tree')}
+              style={{
+                fontSize: '1.25rem',
+                cursor: 'pointer',
+                padding: '2px 4px',
+                borderRadius: '6px',
+                background: activeTab === 'rings' ? 'rgba(245, 158, 11, 0.2)' : 'transparent',
+              }}
+              title="Click to toggle Dendrochronology Tree Rings view"
+            >
+              {activeTab === 'tree' ? '🌱' : '🪵'}
+            </span>
+
             <h2 style={{ fontSize: '1.1rem', fontWeight: 700, letterSpacing: '-0.01em', color: '#f3f4f6' }}>
-              Living Code Tree
+              {activeTab === 'tree' ? 'Living Code Tree' : 'Dendrochronology Rings'}
             </h2>
+
+            {/* Mini concentric ring indicator icon */}
+            <button
+              onClick={() => setActiveTab(activeTab === 'tree' ? 'rings' : 'tree')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '2px 8px',
+                borderRadius: '999px',
+                background: activeTab === 'rings' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(52, 211, 153, 0.1)',
+                border: `1px solid ${activeTab === 'rings' ? 'rgba(245, 158, 11, 0.4)' : 'rgba(52, 211, 153, 0.3)'}`,
+                color: activeTab === 'rings' ? '#fbbf24' : '#34d399',
+                fontSize: '0.7rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+              title="Toggle between Tree Canvas and Dendrochronology Cross-Section"
+            >
+              <span>🪵</span>
+              <span>{telemetry.length} Rings</span>
+            </button>
           </div>
+
           <span style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 600 }}>
             {stageInfo.name} ({xp} XP)
           </span>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
+        {/* View Switcher Tabs & Streak Badge */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div
+            style={{
+              display: 'flex',
+              background: 'rgba(0, 0, 0, 0.4)',
+              borderRadius: '8px',
+              padding: '2px',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+            }}
+          >
+            <button
+              onClick={() => setActiveTab('tree')}
+              style={{
+                padding: '4px 10px',
+                borderRadius: '6px',
+                border: 'none',
+                background: activeTab === 'tree' ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
+                color: activeTab === 'tree' ? '#34d399' : '#9ca3af',
+                fontSize: '0.72rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              🌳 Tree View
+            </button>
+            <button
+              onClick={() => setActiveTab('rings')}
+              style={{
+                padding: '4px 10px',
+                borderRadius: '6px',
+                border: 'none',
+                background: activeTab === 'rings' ? 'rgba(245, 158, 11, 0.2)' : 'transparent',
+                color: activeTab === 'rings' ? '#fbbf24' : '#9ca3af',
+                fontSize: '0.72rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              🪵 Tree Rings
+            </button>
+          </div>
+
           <div
             style={{
               background: 'rgba(245, 158, 11, 0.12)',
@@ -93,10 +238,11 @@ export default function TreeCanvas({ treeState, treeStage }: TreeCanvasProps) {
             }}
           >
             <span>🔥</span>
-            <span>{streakDays} Day Streak</span>
+            <span>{streakDays}d Streak</span>
           </div>
         </div>
       </div>
+
 
       {/* Health Bar with Smooth Color Shifting */}
       <div>
@@ -129,21 +275,29 @@ export default function TreeCanvas({ treeState, treeStage }: TreeCanvasProps) {
         </div>
       </div>
 
-      {/* Tree Visualization Canvas/SVG */}
-      <div
-        style={{
-          position: 'relative',
-          width: '100%',
-          height: '280px',
-          background: 'radial-gradient(ellipse at 50% 80%, rgba(16, 185, 129, 0.12), rgba(0, 0, 0, 0.45))',
-          borderRadius: '12px',
-          border: '1px solid rgba(52, 211, 153, 0.15)',
-          overflow: 'hidden',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
+      {/* Tree Visualization Canvas/SVG or Dendrochronology Tree Rings */}
+      {activeTab === 'rings' ? (
+        <TreeRingCanvas
+          telemetry={telemetry}
+          activeIndex={activeRingIndex}
+          onSelectRing={onSelectRing}
+        />
+      ) : (
+        <div
+          style={{
+            position: 'relative',
+            width: '100%',
+            height: '280px',
+            background: 'radial-gradient(ellipse at 50% 80%, rgba(16, 185, 129, 0.12), rgba(0, 0, 0, 0.45))',
+            borderRadius: '12px',
+            border: '1px solid rgba(52, 211, 153, 0.15)',
+            overflow: 'hidden',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+
         <svg
           viewBox="0 0 400 300"
           style={{ width: '100%', height: '100%', overflow: 'visible' }}
@@ -301,49 +455,337 @@ export default function TreeCanvas({ treeState, treeStage }: TreeCanvasProps) {
             </g>
           )}
 
-          {/* BOTANICAL PARASITE DAMAGE & OVERLAYS */}
-          {/* 1. LOOP_WEED (Thorny wrapping tendrils) */}
-          {hasBug(BugType.LOOP_WEED) && (
+          {/* BOTANICAL AST PARASITE DAMAGE & LOCALIZED OVERLAYS */}
+
+          {/* 1. ParasiteType.CATERPILLAR on Branch Tip */}
+          {hasParasite(ParasiteType.CATERPILLAR) && (() => {
+            const pos = getCaterpillarPos();
+            const isSelected = selectedParasite === ParasiteType.CATERPILLAR;
+            return (
+              <g
+                transform={`translate(${pos.x}, ${pos.y})`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedParasite(ParasiteType.CATERPILLAR);
+                  onSelectParasite?.(ParasiteType.CATERPILLAR);
+                }}
+                style={{ cursor: 'pointer' }}
+                className="animate-crawl"
+              >
+                {/* Pulsing Alert Ring on Branch Tip */}
+                <circle
+                  cx="0"
+                  cy="0"
+                  r={isSelected ? '18' : '14'}
+                  fill="rgba(245, 158, 11, 0.25)"
+                  stroke="#f59e0b"
+                  strokeWidth={isSelected ? '2' : '1.5'}
+                  strokeDasharray="3 3"
+                >
+                  <animate attributeName="r" values="13;17;13" dur="2s" repeatCount="indefinite" />
+                  <animate attributeName="stroke-opacity" values="0.9;0.3;0.9" dur="2s" repeatCount="indefinite" />
+                </circle>
+
+                {/* Nibbled/withering brown leaf segment */}
+                <path d="M -8 4 Q 0 8 8 2 Q 4 -4 -6 -2 Z" fill="#78350f" opacity="0.85" />
+
+                {/* High-res segmented caterpillar sprite attached to branch tip */}
+                <circle cx="-6" cy="1" r="3.5" fill="#f59e0b" />
+                <circle cx="-2" cy="-1" r="4" fill="#fbbf24" />
+                <circle cx="3" cy="0" r="4.5" fill="#facc15" />
+                {/* Caterpillar Head */}
+                <circle cx="8" cy="-2" r="5" fill="#f59e0b" stroke="#78350f" strokeWidth="0.8" />
+                {/* Eyes */}
+                <circle cx="9" cy="-3.5" r="1" fill="#1e293b" />
+                <circle cx="7" cy="-3.5" r="0.8" fill="#1e293b" />
+                {/* Antennae */}
+                <path d="M 9 -6 L 11 -9 M 7 -6 L 6 -9" stroke="#b45309" strokeWidth="1" strokeLinecap="round" />
+
+                {/* Interactive Click-to-Diagnose pill tag */}
+                <g transform="translate(0, -18)">
+                  <rect
+                    x="-42"
+                    y="-9"
+                    width="84"
+                    height="16"
+                    rx="4"
+                    fill="rgba(15, 23, 42, 0.9)"
+                    stroke="#f59e0b"
+                    strokeWidth="1"
+                  />
+                  <text x="0" y="3" textAnchor="middle" fontSize="8" fontWeight="bold" fill="#fef08a">
+                    🐛 Click Branch Tip
+                  </text>
+                </g>
+              </g>
+            );
+          })()}
+
+          {/* 2. ParasiteType.FUNGAL_BLIGHT at Node Junction */}
+          {hasParasite(ParasiteType.FUNGAL_BLIGHT) && (() => {
+            const pos = getFungalBlightPos();
+            const isSelected = selectedParasite === ParasiteType.FUNGAL_BLIGHT;
+            return (
+              <g
+                transform={`translate(${pos.x}, ${pos.y})`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedParasite(ParasiteType.FUNGAL_BLIGHT);
+                  onSelectParasite?.(ParasiteType.FUNGAL_BLIGHT);
+                }}
+                style={{ cursor: 'pointer' }}
+              >
+                {/* Necrotic junction patch */}
+                <ellipse
+                  cx="0"
+                  cy="0"
+                  rx={isSelected ? '20' : '16'}
+                  ry="10"
+                  fill="rgba(159, 18, 57, 0.6)"
+                  stroke="#f43f5e"
+                  strokeWidth="1.2"
+                  strokeDasharray="2 2"
+                />
+
+                {/* Clustered Bioluminescent Fungal Caps */}
+                {/* Left Cap */}
+                <path d="M -9 4 Q -5 -7 0 3 Z" fill="#e11d48" stroke="#fecdd3" strokeWidth="0.8" />
+                <circle cx="-4" cy="-1" r="1" fill="#fff" />
+                {/* Center High Cap */}
+                <path d="M -4 2 Q 2 -11 8 3 Z" fill="#be123c" stroke="#f43f5e" strokeWidth="0.8" />
+                <circle cx="2" cy="-4" r="1.2" fill="#ffe4e6" />
+                {/* Right Shelf Fungus */}
+                <path d="M 4 5 C 11 3 13 8 5 9 Z" fill="#9333ea" />
+
+                {/* Spore particles floating from node junction */}
+                <circle cx="-6" cy="-8" r="1.5" fill="#f43f5e">
+                  <animate attributeName="cy" values="-8;-16;-8" dur="2.4s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.9;0.2;0.9" dur="2.4s" repeatCount="indefinite" />
+                </circle>
+                <circle cx="5" cy="-10" r="1.5" fill="#c084fc">
+                  <animate attributeName="cy" values="-10;-18;-10" dur="2s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.8;0.2;0.8" dur="2s" repeatCount="indefinite" />
+                </circle>
+
+                {/* Interactive Click-to-Diagnose pill tag */}
+                <g transform="translate(0, -18)">
+                  <rect
+                    x="-46"
+                    y="-9"
+                    width="92"
+                    height="16"
+                    rx="4"
+                    fill="rgba(15, 23, 42, 0.9)"
+                    stroke="#f43f5e"
+                    strokeWidth="1"
+                  />
+                  <text x="0" y="3" textAnchor="middle" fontSize="8" fontWeight="bold" fill="#fda4af">
+                    🍄 Click Junction
+                  </text>
+                </g>
+              </g>
+            );
+          })()}
+
+          {/* 3. ParasiteType.STRANGLER_VINE wrapping Central Trunk */}
+          {hasParasite(ParasiteType.STRANGLER_VINE) && (() => {
+            const isSelected = selectedParasite === ParasiteType.STRANGLER_VINE;
+            return (
+              <g
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedParasite(ParasiteType.STRANGLER_VINE);
+                  onSelectParasite?.(ParasiteType.STRANGLER_VINE);
+                }}
+                style={{ cursor: 'pointer' }}
+              >
+                {/* Heavy thorny constricting vine coils wrapping around the central trunk */}
+                <g stroke="#84cc16" strokeWidth={isSelected ? '4' : '3'} fill="none" strokeLinecap="round">
+                  <path d="M 186 265 Q 200 252 214 262" stroke="#4d7c0f" />
+                  <path d="M 215 248 Q 198 238 185 248" stroke="#65a30d" />
+                  <path d="M 186 232 Q 200 220 214 230" stroke="#84cc16" />
+                  <path d="M 186 265 Q 205 248 185 232" stroke="#a3e635" strokeWidth="2.5" />
+                  <path d="M 214 262 Q 195 244 214 230" stroke="#4d7c0f" strokeWidth="2.5" />
+                </g>
+                {/* Thorns */}
+                <polygon points="183,250 186,247 186,253" fill="#365314" />
+                <polygon points="217,245 214,242 214,248" fill="#365314" />
+                <polygon points="184,233 187,230 187,236" fill="#365314" />
+                <polygon points="216,260 213,257 213,263" fill="#365314" />
+
+                {/* Glowing strangler heart on the central trunk */}
+                <g transform="translate(200, 240)">
+                  <circle cx="0" cy="0" r={isSelected ? '12' : '9'} fill="rgba(132, 204, 22, 0.35)" stroke="#84cc16" strokeWidth="1.5">
+                    <animate attributeName="r" values="9;12;9" dur="1.8s" repeatCount="indefinite" />
+                  </circle>
+                  <text x="-6" y="5" fontSize="12">🌿</text>
+                  {/* Interactive Click-to-Diagnose pill tag */}
+                  <g transform="translate(0, 18)">
+                    <rect
+                      x="-42"
+                      y="-8"
+                      width="84"
+                      height="16"
+                      rx="4"
+                      fill="rgba(15, 23, 42, 0.9)"
+                      stroke="#84cc16"
+                      strokeWidth="1"
+                    />
+                    <text x="0" y="3" textAnchor="middle" fontSize="8" fontWeight="bold" fill="#bef264">
+                      🌿 Click Trunk
+                    </text>
+                  </g>
+                </g>
+              </g>
+            );
+          })()}
+
+          {/* Legacy Bug Fallbacks if not already covered by Parasite */}
+          {!hasParasite(ParasiteType.STRANGLER_VINE) && hasBug(BugType.LOOP_WEED) && (
             <g stroke="#84cc16" strokeWidth="2.5" fill="none" strokeDasharray="3 2">
               <path d="M 185 265 Q 205 255 195 240 Q 185 225 208 215" />
               <path d="M 215 260 Q 192 245 205 230 Q 215 215 198 200" />
-              {/* Thorns */}
-              <circle cx="198" cy="245" r="2" fill="#4d7c0f" />
-              <circle cx="204" cy="225" r="2" fill="#4d7c0f" />
             </g>
           )}
 
-          {/* 2. BOUNDARY_BEETLE on lower branch */}
-          {hasBug(BugType.BOUNDARY_BEETLE) && (
+          {!hasParasite(ParasiteType.CATERPILLAR) && !hasParasite(ParasiteType.FUNGAL_BLIGHT) && hasBug(BugType.BOUNDARY_BEETLE) && (
             <g transform="translate(210, 215)" className="animate-crawl">
               <circle cx="0" cy="0" r="10" fill="rgba(239, 68, 68, 0.25)" />
               <text x="-7" y="5" fontSize="14">🪲</text>
             </g>
           )}
 
-          {/* 3. STRUCTURE_CATERPILLAR creeping on branch */}
-          {hasBug(BugType.STRUCTURE_CATERPILLAR) && (
+          {!hasParasite(ParasiteType.CATERPILLAR) && hasBug(BugType.STRUCTURE_CATERPILLAR) && (
             <g transform="translate(170, 195)" className="animate-crawl">
               <circle cx="0" cy="0" r="10" fill="rgba(245, 158, 11, 0.25)" />
               <text x="-7" y="5" fontSize="14">🐛</text>
             </g>
           )}
 
-          {/* 4. SCOPE_SLUG on trunk */}
           {hasBug(BugType.SCOPE_SLUG) && (
             <g transform="translate(192, 235)" className="animate-crawl">
               <ellipse cx="0" cy="0" rx="10" ry="7" fill="rgba(168, 85, 247, 0.25)" />
               <text x="-7" y="5" fontSize="14">🐌</text>
             </g>
           )}
-
-          {/* 5. LOOP_WEED icon at base */}
-          {hasBug(BugType.LOOP_WEED) && (
-            <g transform="translate(200, 260)">
-              <text x="-7" y="5" fontSize="14">🌿</text>
-            </g>
-          )}
         </svg>
+
+        {/* CLICK-TO-DIAGNOSE: In-Canvas Socratic Prompt Dialogue Card (Req 3) */}
+        {selectedParasite && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '12px',
+              left: '12px',
+              right: '12px',
+              background: 'rgba(10, 15, 20, 0.94)',
+              backdropFilter: 'blur(12px)',
+              border: `1.5px solid ${PARASITE_DEFINITIONS[selectedParasite].color}`,
+              borderRadius: '12px',
+              padding: '12px 16px',
+              boxShadow: `0 8px 32px rgba(0, 0, 0, 0.6), 0 0 16px ${PARASITE_DEFINITIONS[selectedParasite].bg}`,
+              zIndex: 30,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.4rem' }}>{PARASITE_DEFINITIONS[selectedParasite].emoji}</span>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '0.88rem', fontWeight: 700, color: PARASITE_DEFINITIONS[selectedParasite].color }}>
+                      {PARASITE_DEFINITIONS[selectedParasite].name}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '0.68rem',
+                        padding: '1px 8px',
+                        borderRadius: '999px',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        color: '#cbd5e1',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                      }}
+                    >
+                      AST Attachment: {PARASITE_DEFINITIONS[selectedParasite].locationLabel}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                    Localized visual parasite attached to AST node
+                  </span>
+                </div>
+              </div>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedParasite(null);
+                  onSelectParasite?.(null);
+                }}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  border: 'none',
+                  color: '#94a3b8',
+                  borderRadius: '6px',
+                  width: '22px',
+                  height: '22px',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                title="Close Diagnostic"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Single-Sentence Socratic Prompt (Strictly no code solution) */}
+            <div
+              style={{
+                background: 'rgba(0, 0, 0, 0.5)',
+                borderLeft: `3px solid ${PARASITE_DEFINITIONS[selectedParasite].color}`,
+                borderRadius: '0 8px 8px 0',
+                padding: '8px 12px',
+                marginBottom: '8px',
+              }}
+            >
+              <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8', marginBottom: '2px' }}>
+                Socratic Diagnostic Inquiry:
+              </div>
+              <p style={{ fontSize: '0.84rem', color: '#f8fafc', fontWeight: 500, lineHeight: 1.45, margin: 0 }}>
+                &ldquo;{socraticPrompt || PARASITE_DEFINITIONS[selectedParasite].defaultPrompt}&rdquo;
+              </p>
+            </div>
+
+            {/* Footer Notice */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.7rem', color: '#34d399' }}>
+                <span>💡</span>
+                <span>Reflective inquiry enabled &bull; No code solutions revealed</span>
+              </div>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedParasite(null);
+                  onSelectParasite?.(null);
+                }}
+                style={{
+                  padding: '3px 10px',
+                  borderRadius: '6px',
+                  background: PARASITE_DEFINITIONS[selectedParasite].color,
+                  border: 'none',
+                  color: '#0f172a',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Check Code &rarr;
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Ambient Spore Particles */}
         <div
@@ -361,21 +803,22 @@ export default function TreeCanvas({ treeState, treeStage }: TreeCanvasProps) {
           Stage {treeStage}
         </div>
       </div>
+    )}
 
       {/* Dynamic Parasite Diagnostics & Objective Badges */}
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#9ca3af' }}>
-            Active Parasites ({activeBugs.length})
+            Active Parasites ({activeParasites.length + activeBugs.length})
           </span>
-          {activeBugs.length === 0 && (
+          {activeParasites.length === 0 && activeBugs.length === 0 && (
             <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 600 }}>
               ✓ Canopy Healthy & Bug-Free
             </span>
           )}
         </div>
 
-        {activeBugs.length === 0 ? (
+        {activeParasites.length === 0 && activeBugs.length === 0 ? (
           <div
             style={{
               padding: '10px 14px',
@@ -394,6 +837,72 @@ export default function TreeCanvas({ treeState, treeStage }: TreeCanvasProps) {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {/* 1. Active ParasiteType Cards */}
+            {activeParasites.map((parasite, idx) => {
+              const def = PARASITE_DEFINITIONS[parasite];
+              const isSelected = selectedParasite === parasite;
+
+              return (
+                <div
+                  key={`parasite-${parasite}-${idx}`}
+                  style={{
+                    padding: '8px 12px',
+                    background: def.bg,
+                    border: `1px solid ${isSelected ? def.color : def.border}`,
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    boxShadow: isSelected ? `0 0 10px ${def.bg}` : 'none',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '1.25rem' }}>{def.emoji}</span>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: def.color }}>
+                          {def.name}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: '0.68rem',
+                            padding: '1px 6px',
+                            borderRadius: '4px',
+                            background: 'rgba(0,0,0,0.4)',
+                            color: '#e2e8f0',
+                          }}
+                        >
+                          Node: {def.locationLabel}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: '#9ca3af' }}>{def.description}</div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setSelectedParasite(parasite);
+                      setActiveTab('tree');
+                      onSelectParasite?.(parasite);
+                    }}
+                    style={{
+                      fontSize: '0.72rem',
+                      color: def.color,
+                      fontWeight: 600,
+                      background: 'rgba(0,0,0,0.4)',
+                      border: `1px solid ${def.color}`,
+                      padding: '3px 10px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Click to Diagnose
+                  </button>
+                </div>
+              );
+            })}
+
+            {/* 2. Legacy BugType Cards (when not duplicated) */}
             {activeBugs.map((bug, idx) => {
               const bugConfig = {
                 [BugType.BOUNDARY_BEETLE]: {
@@ -436,7 +945,7 @@ export default function TreeCanvas({ treeState, treeStage }: TreeCanvasProps) {
 
               return (
                 <div
-                  key={`${bug}-${idx}`}
+                  key={`bug-${bug}-${idx}`}
                   style={{
                     padding: '8px 12px',
                     background: bugConfig.bg,

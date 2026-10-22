@@ -6,7 +6,15 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import { StringDecoder } from 'node:string_decoder';
-import { BugType, mapExceptionToBug } from './treeEngine';
+import {
+  BugType,
+  mapExceptionToBug,
+  ParasiteType,
+  mapExceptionToParasite,
+  generateSocraticPrompt,
+  PARASITE_DEFINITIONS,
+  ParasiteLocation,
+} from './treeEngine';
 import { TestCase } from './curriculumData';
 
 export interface ExecutionResult {
@@ -15,6 +23,9 @@ export interface ExecutionResult {
   stderr: string;
   errorType?: string;
   detectedBug?: BugType;
+  detectedParasite?: ParasiteType;
+  socraticPrompt?: string;
+  astLocation?: ParasiteLocation;
   failedTestCaseIndex?: number;
   executionTimeMs: number;
 }
@@ -350,14 +361,18 @@ export async function runPythonCode(
     totalTimeMs += procResult.durationMs;
     lastStdout = procResult.stdout;
 
-    // Timeout handling
-    if (procResult.timedOut) {
+    // Timeout handling (>2s)
+    if (procResult.timedOut || totalTimeMs >= 2000) {
+      const parasite = ParasiteType.STRANGLER_VINE;
       return {
         passed: false,
         stdout: procResult.stdout.trim(),
-        stderr: `TimeoutError: Execution exceeded ${timeoutMs}ms limit (Infinite loop / iteration limit exceeded)`,
+        stderr: `TimeoutError: Execution exceeded ${timeoutMs}ms limit (>2s infinite loop / iteration limit exceeded)`,
         errorType: 'TimeoutError',
         detectedBug: BugType.LOOP_WEED,
+        detectedParasite: parasite,
+        socraticPrompt: generateSocraticPrompt(parasite, { errorType: 'TimeoutError', code }),
+        astLocation: PARASITE_DEFINITIONS[parasite].location,
         failedTestCaseIndex: i,
         executionTimeMs: totalTimeMs,
       };
@@ -367,6 +382,18 @@ export async function runPythonCode(
     if (procResult.exitCode !== 0 || procResult.stderr.trim().length > 0) {
       const errorClass = extractErrorTypeFromStderr(procResult.stderr) ?? 'RuntimeError';
       const detectedBug = mapExceptionToBug(errorClass);
+      const detectedParasite =
+        mapExceptionToParasite(errorClass, procResult.stderr, totalTimeMs) ?? undefined;
+      const socraticPrompt = detectedParasite
+        ? generateSocraticPrompt(detectedParasite, {
+            errorType: errorClass,
+            stderr: procResult.stderr,
+            code,
+          })
+        : undefined;
+      const astLocation = detectedParasite
+        ? PARASITE_DEFINITIONS[detectedParasite].location
+        : undefined;
 
       return {
         passed: false,
@@ -374,6 +401,9 @@ export async function runPythonCode(
         stderr: procResult.stderr.trim(),
         errorType: errorClass,
         detectedBug,
+        detectedParasite,
+        socraticPrompt,
+        astLocation,
         failedTestCaseIndex: i,
         executionTimeMs: totalTimeMs,
       };

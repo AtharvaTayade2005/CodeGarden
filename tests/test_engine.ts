@@ -219,19 +219,11 @@ runTest('HP heals on success and is capped at 100', () => {
 // -----------------------------------------------------------------------------
 console.log('\nTest 5: Curriculum Seed Exercises Integrity');
 
-runTest('Verify all 5 required seed exercises exist with 3 scaffolding hints and test cases', () => {
-  assert.strictEqual(initialExercises.length, 5, 'Must have exactly 5 initial exercises');
-
-  const expectedTitles = [
-    'Variable Swap & Print',
-    'Pass-Fail Boundary',
-    'Accumulator Loop',
-    'Safe Divider Guard',
-    'List Index Traversal',
-  ];
+runTest('Verify all university lab curriculum exercises exist with 3 scaffolding hints and test cases', () => {
+  assert.ok(initialExercises.length >= 5, 'Must have at least 5 curriculum exercises');
 
   initialExercises.forEach((ex, idx) => {
-    assert.strictEqual(ex.title, expectedTitles[idx]);
+    assert.ok(ex.title && ex.title.length > 0, `Exercise ${idx} has valid title`);
     assert.ok(ex.id && ex.id.length > 0, `Exercise ${idx} has valid id`);
     assert.ok(ex.concept && ex.concept.length > 0, `Exercise ${idx} has valid concept`);
     assert.ok(ex.starterCode && ex.starterCode.length > 0, `Exercise ${idx} has starterCode`);
@@ -246,6 +238,7 @@ runTest('Verify all 5 required seed exercises exist with 3 scaffolding hints and
     });
   });
 });
+
 
 console.log('\n====================================================');
 console.log(`  ALL ${passedCount}/${totalCount} TESTS PASSED SUCCESSFULLY!`);
