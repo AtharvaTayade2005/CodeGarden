@@ -18,6 +18,14 @@ import {
   generateInitialTelemetryRings,
   evaluateExecutionEvent,
 } from '@/lib/dendrochronology';
+import TheoryDrawer from './TheoryDrawer';
+import CompletionModal from './CompletionModal';
+import {
+  AchievementBadge,
+  evaluateUnlockedBadges,
+  getAllMilestoneBadges,
+  getBadgeById,
+} from '@/src/data/badges';
 
 interface LearnWorkspaceClientProps {
   exercise: Exercise;
@@ -45,6 +53,14 @@ export default function LearnWorkspaceClient({ exercise }: LearnWorkspaceClientP
   const [previousCode, setPreviousCode] = useState<string>(exercise.starterCode);
   const [scrubbedIndex, setScrubbedIndex] = useState<number | null>(null);
 
+  // Theory Drawer & Achievement Badges State
+  const [isTheoryUnlocked, setIsTheoryUnlocked] = useState<boolean>(true);
+  const [completedExerciseIds, setCompletedExerciseIds] = useState<string[]>([]);
+  const [unlockedBadges, setUnlockedBadges] = useState<AchievementBadge[]>([]);
+  const [activeCelebrationBadge, setActiveCelebrationBadge] = useState<AchievementBadge | null>(null);
+  const [showCompletionModal, setShowCompletionModal] = useState<boolean>(false);
+  const [showBadgesShowcaseModal, setShowBadgesShowcaseModal] = useState<boolean>(false);
+
   // Replay frame resolution (Req 4: Scrubbable timeline slider replay)
   const isLive = scrubbedIndex === null || scrubbedIndex === telemetry.length - 1;
   const currentTimelineIndex = scrubbedIndex ?? Math.max(0, telemetry.length - 1);
@@ -54,12 +70,27 @@ export default function LearnWorkspaceClient({ exercise }: LearnWorkspaceClientP
   const displayedTreeState = !isLive && activeTimelinePoint ? activeTimelinePoint.treeState : treeState;
   const displayedTreeStage = getTreeStage(displayedTreeState.xp);
 
-  // Restore or sync treeState from localStorage on client
+  // Restore or sync treeState & badges from localStorage on client
   useEffect(() => {
     try {
       const saved = localStorage.getItem('codegarden_tree_state');
       if (saved) {
         setTreeState(JSON.parse(saved));
+      }
+      const savedCompleted = localStorage.getItem('codegarden_completed_exercises');
+      if (savedCompleted) {
+        setCompletedExerciseIds(JSON.parse(savedCompleted));
+      }
+      const savedBadges = localStorage.getItem('codegarden_unlocked_badges');
+      if (savedBadges) {
+        setUnlockedBadges(JSON.parse(savedBadges));
+      } else {
+        // Initial fallback
+        setUnlockedBadges([]);
+      }
+      const savedTheoryUnlocked = localStorage.getItem('codegarden_theory_drawer_collapsed');
+      if (savedTheoryUnlocked === 'true') {
+        setIsTheoryUnlocked(true);
       }
     } catch {
       // Ignore localStorage errors
@@ -74,6 +105,28 @@ export default function LearnWorkspaceClient({ exercise }: LearnWorkspaceClientP
       // Ignore
     }
   }, [treeState]);
+
+  // Persist completed exercises
+  useEffect(() => {
+    if (completedExerciseIds.length > 0) {
+      try {
+        localStorage.setItem('codegarden_completed_exercises', JSON.stringify(completedExerciseIds));
+      } catch {
+        // Ignore
+      }
+    }
+  }, [completedExerciseIds]);
+
+  // Persist unlocked badges
+  useEffect(() => {
+    if (unlockedBadges.length > 0) {
+      try {
+        localStorage.setItem('codegarden_unlocked_badges', JSON.stringify(unlockedBadges));
+      } catch {
+        // Ignore
+      }
+    }
+  }, [unlockedBadges]);
 
   // Reset editor when exercise changes
   useEffect(() => {
@@ -149,6 +202,32 @@ export default function LearnWorkspaceClient({ exercise }: LearnWorkspaceClientP
           message: '🌟 Success! Tests Passed: +20 XP, +10 HP (Healed). Parasite resolved!',
           type: 'success',
         });
+
+        // 1. Record completed exercise
+        const updatedCompleted = Array.from(new Set([...completedExerciseIds, exercise.id]));
+        setCompletedExerciseIds(updatedCompleted);
+
+        // 2. Evaluate and award milestone badges
+        const newlyEvaluatedBadges = evaluateUnlockedBadges(updatedCompleted, {
+          conqueredBugsCount: 1,
+          hintsUsed: telemetryContext.hintsUsedForCurrentBug,
+          totalAttempts: attemptCount + 1,
+        });
+
+        setUnlockedBadges(newlyEvaluatedBadges);
+
+        // 3. Select the most relevant celebration badge for this experiment
+        let celebrationBadge: AchievementBadge = newlyEvaluatedBadges[0] || getAllMilestoneBadges()[0];
+        if (exercise.id === 'variable-swap-print') {
+          celebrationBadge = getBadgeById('syntax-survivor') || celebrationBadge;
+        } else if (exercise.id === 'pass-fail-boundary' || exercise.id === 'accumulator-loop') {
+          celebrationBadge = getBadgeById('control-flow-conquered') || celebrationBadge;
+        } else if (updatedCompleted.length >= 2) {
+          celebrationBadge = getBadgeById('viva-ready') || celebrationBadge;
+        }
+
+        setActiveCelebrationBadge(celebrationBadge);
+        setShowCompletionModal(true);
       } else {
         const nextAttempt = attemptCount + 1;
         setAttemptCount(nextAttempt);
@@ -250,6 +329,13 @@ export default function LearnWorkspaceClient({ exercise }: LearnWorkspaceClientP
       diffSummary: 'Demo State',
     };
     setTelemetry((prev) => [...prev, demoPoint]);
+
+    // If recovery is simulated in demo, also trigger celebration modal
+    if (!hasBug && newState.hp === 100) {
+      const badge = getBadgeById('syntax-survivor') || getAllMilestoneBadges()[0];
+      setActiveCelebrationBadge(badge);
+      setShowCompletionModal(true);
+    }
   };
 
 
@@ -417,6 +503,23 @@ export default function LearnWorkspaceClient({ exercise }: LearnWorkspaceClientP
             <span style={{ color: '#10b981', fontWeight: 700 }}>{treeStage}</span>
             <span style={{ color: '#fbbf24', fontWeight: 700 }}>({treeState.hp} HP)</span>
           </div>
+
+          {/* Badges Trophy Pill */}
+          <button
+            onClick={() => setShowBadgesShowcaseModal(true)}
+            className="btn-secondary"
+            style={{
+              padding: '4px 10px',
+              fontSize: '0.72rem',
+              borderColor: 'rgba(251, 191, 36, 0.4)',
+              color: '#fbbf24',
+              background: 'rgba(251, 191, 36, 0.1)',
+            }}
+            title="View Earned Badges & GitHub Markdown Embeds"
+          >
+            <span>🏆</span>
+            <span>Badges ({unlockedBadges.length > 0 ? unlockedBadges.length : '0/4'})</span>
+          </button>
 
           {/* Faculty LMS Export & Cockpit Toggle */}
           <Link
@@ -689,6 +792,14 @@ export default function LearnWorkspaceClient({ exercise }: LearnWorkspaceClientP
             </div>
           )}
 
+          {/* Part 1: Theory & Syntax Foundation Deck Drawer */}
+          <TheoryDrawer
+            exerciseId={exercise.id}
+            exerciseConcept={exercise.concept}
+            isUnlocked={isTheoryUnlocked}
+            onUnlockEditor={() => setIsTheoryUnlocked(true)}
+          />
+
           {/* Monaco Code Editor */}
           <CodeEditor
             code={displayedCode}
@@ -766,6 +877,113 @@ export default function LearnWorkspaceClient({ exercise }: LearnWorkspaceClientP
           </div>
         </div>
       </main>
+      {/* Part 2: Module Completion Celebration Modal */}
+      {activeCelebrationBadge && (
+        <CompletionModal
+          isOpen={showCompletionModal}
+          onClose={() => setShowCompletionModal(false)}
+          badge={activeCelebrationBadge}
+          exercise={exercise}
+          treeState={treeState}
+          nextExercise={nextExercise}
+        />
+      )}
+
+      {/* Badges Collection Showcase Modal */}
+      {showBadgesShowcaseModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.8)',
+            backdropFilter: 'blur(10px)',
+            zIndex: 150,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+          onClick={() => setShowBadgesShowcaseModal(false)}
+        >
+          <div
+            className="glass-panel-elevated"
+            style={{
+              maxWidth: '650px',
+              width: '100%',
+              padding: '28px',
+              borderRadius: '20px',
+              border: '2px solid rgba(251, 191, 36, 0.4)',
+              background: '#0d1811',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+              <div>
+                <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', fontWeight: 800, color: '#ffffff', margin: 0 }}>
+                  🏆 Academic Achievement Badges
+                </h3>
+                <p style={{ fontSize: '0.82rem', color: '#9ca3af', margin: '4px 0 0' }}>
+                  Milestone badges unlocked across Mumbai University & SPPU practical modules.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowBadgesShowcaseModal(false)}
+                style={{ background: 'transparent', border: 'none', color: '#9ca3af', fontSize: '1.2rem', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
+              {getAllMilestoneBadges().map((b) => {
+                const isEarned = unlockedBadges.some((ub) => ub.id === b.id);
+                return (
+                  <div
+                    key={b.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '16px',
+                      padding: '14px 16px',
+                      borderRadius: '12px',
+                      background: isEarned ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+                      border: isEarned ? `1.5px solid ${b.color}` : '1px solid rgba(255, 255, 255, 0.1)',
+                      opacity: isEarned ? 1 : 0.65,
+                    }}
+                  >
+                    <div style={{ fontSize: '1.8rem' }}>{b.icon}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <strong style={{ color: isEarned ? '#ffffff' : '#9ca3af', fontSize: '0.95rem' }}>{b.name}</strong>
+                        {isEarned ? (
+                          <span style={{ fontSize: '0.65rem', background: '#10b981', color: '#ffffff', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                            UNLOCKED
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: '0.65rem', background: 'rgba(255, 255, 255, 0.1)', color: '#9ca3af', padding: '2px 6px', borderRadius: '4px' }}>
+                            LOCKED
+                          </span>
+                        )}
+                      </div>
+                      <p style={{ fontSize: '0.78rem', color: '#9ca3af', margin: '2px 0 0' }}>{b.description}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ textAlign: 'right' }}>
+              <button
+                onClick={() => setShowBadgesShowcaseModal(false)}
+                className="btn-codedex-yellow"
+                style={{ padding: '8px 18px', fontSize: '0.85rem' }}
+              >
+                Close Showcase
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
